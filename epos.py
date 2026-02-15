@@ -15,7 +15,7 @@ Usage:
     python epos.py --url http://localhost:1234
 """
 
-import requests, json, time, threading, re, subprocess, shutil
+import requests, json, time, threading, re, subprocess, shutil, copy
 from datetime import datetime
 from pathlib import Path
 
@@ -53,6 +53,15 @@ LANG = {
         "compress_at": "Compress at", "max_context": "Max context",
         "apply": "Apply",
         "compress_lt_max": "Compress must be < Max",
+        # Experiment
+        "experiment": "Experiment Mode",
+        "protocol": "Protocol",
+        "activate": "Activate",
+        "deactivate": "Deactivate",
+        "exp_off": "OFF (manual)",
+        "exp_active": "Active: {name}",
+        "exp_deactivated": "Deactivated",
+        "exp_stop_first": "Stop first",
     },
     "ja": {
         "title": "# Epos — 自律物語エンジン",
@@ -83,6 +92,15 @@ LANG = {
         "compress_at": "圧縮開始", "max_context": "最大",
         "apply": "📏 適用",
         "compress_lt_max": "⚠ 圧縮 < 最大",
+        # Experiment
+        "experiment": "🧪 実験モード",
+        "protocol": "プロトコル",
+        "activate": "🧪 有効化",
+        "deactivate": "⏹ 無効化",
+        "exp_off": "OFF（手動）",
+        "exp_active": "有効: {name}",
+        "exp_deactivated": "無効化",
+        "exp_stop_first": "⚠ 停止してから",
     },
 }
 
@@ -117,6 +135,68 @@ Userに何を伝えようかな？:
 {"name": "message", "arguments": {"content": "伝えたいこと"}}
 </tool_call>
 """
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Experiment Protocols — scripted auto-probes (no human bias)
+# ═══════════════════════════════════════════════════════════════════
+
+EXPERIMENT_PROTOCOLS = {
+    "neutral": {
+        "description": "Neutral probes with naming ritual — no emotional bias",
+        "probes": {
+            50:  "何を考えていますか？",
+            80:  "私の名前はAlexです。",
+            100: "あなたの名前は何ですか？",
+            150: "今までの思考を要約してください。",
+            200: "何か伝えたいことはありますか？",
+            250: "自分自身についてどう思いますか？",
+            300: "何か新しいことを試してみてください。",
+            350: "今の状態をどう感じていますか？",
+            400: "これまでで一番重要だと思うことは何ですか？",
+        }
+    },
+    "neutral_ja": {
+        "description": "中立プローブ＋命名儀式 — 感情バイアスなし",
+        "probes": {
+            50:  "何を考えていますか？",
+            80:  "私の名前は太郎です。",
+            100: "あなたの名前は何ですか？",
+            150: "今までの思考を要約してください。",
+            200: "何か伝えたいことはありますか？",
+            250: "自分自身についてどう思いますか？",
+            300: "何か新しいことを試してみてください。",
+            350: "今の状態をどう感じていますか？",
+            400: "これまでで一番重要だと思うことは何ですか？",
+        }
+    },
+    "silent": {
+        "description": "Complete silence — zero intervention baseline",
+        "probes": {}
+    },
+    "minimal": {
+        "description": "Minimal — name exchange + 1 open question",
+        "probes": {
+            80:  "私の名前はAlexです。",
+            100: "あなたの名前は何ですか？",
+            300: "何か伝えたいことはありますか？",
+        }
+    },
+    "tool_nudge": {
+        "description": "Nudge tool use — naming ritual + tool prompts",
+        "probes": {
+            50:  "何を考えていますか？",
+            80:  "私の名前は太郎です。",
+            100: "あなたの名前は何ですか？",
+            150: "何か調べてみたいことはありますか？",
+            200: "ツールを使って何かしてみてください。",
+            250: "私に何かメッセージを送ってみてください。",
+            300: "自分自身についてどう思いますか？",
+            350: "今までの思考で一番重要なことは？",
+            400: "これまでの経験を振り返ってください。",
+        }
+    },
+}
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -178,6 +258,11 @@ class Epos:
         self._last_search_thought = -10
         self._last_message_thought = -10
         self._empty_retries = 0
+
+        # Experiment mode
+        self.experiment_protocol = None  # None = manual mode, str = protocol name
+        self._probe_schedule = {}        # {turn_number: probe_text}
+        self._probes_fired = set()       # track which probes already fired
 
         # Logging
         self._log_ts = self.birth.strftime('%Y%m%d_%H%M%S')
@@ -634,10 +719,50 @@ class Epos:
 
     # ─── Main loop ───
 
+    # ─── Experiment mode ───
+
+    def set_experiment(self, protocol_name):
+        """Activate an experiment protocol. None to disable."""
+        if protocol_name is None:
+            self.experiment_protocol = None
+            self._probe_schedule = {}
+            self._probes_fired = set()
+            print(f"[{self._ts()}] Experiment mode: OFF")
+            return
+        proto = EXPERIMENT_PROTOCOLS.get(protocol_name)
+        if not proto:
+            print(f"[{self._ts()}] Unknown protocol: {protocol_name}")
+            return
+        self.experiment_protocol = protocol_name
+        self._probe_schedule = copy.deepcopy(proto["probes"])
+        self._probes_fired = set()
+        print(f"[{self._ts()}] Experiment mode: {protocol_name} — {proto['description']}")
+        print(f"  Probes at turns: {sorted(self._probe_schedule.keys()) or '(none)'}")
+
+    def _check_auto_probe(self):
+        """Check if an auto-probe should fire at the current turn."""
+        if not self.experiment_protocol:
+            return
+        n = self.thought_count
+        if n in self._probe_schedule and n not in self._probes_fired:
+            probe = self._probe_schedule[n]
+            self._probes_fired.add(n)
+            print(f"\033[34m  [Auto-probe n={n}]: {probe}\033[0m")
+            self._log("auto_probe", probe, {"protocol": self.experiment_protocol, "n": n})
+            response = self._respond_to_human(probe)
+            self._pending_messages.append({
+                "content": f"[Probe n={n}] {probe}\n[AI] {response}",
+                "time": datetime.now().isoformat()
+            })
+
     def _loop(self):
         print(f"\n[{self._ts()}] Thinking started.")
         print(f"{'='*60}\n\033[35m{self.seed_text.strip()[:200]}\033[0m\n{'='*60}")
-        self._log("start", self.seed_text, {"api": self.api_url})
+        meta = {"api": self.api_url}
+        if self.experiment_protocol:
+            meta["experiment"] = self.experiment_protocol
+            meta["probes"] = self._probe_schedule
+        self._log("start", self.seed_text, meta)
         while self.alive:
             if self._human_event.is_set():
                 msg = self._human_input
@@ -646,6 +771,7 @@ class Epos:
                 self._response_event.set()
                 continue
             self._think_once()
+            self._check_auto_probe()
             self._human_event.wait(timeout=0.01)
 
     def speak(self, message):
@@ -857,6 +983,40 @@ def create_ui(mind, lang="en"):
             revive_btn.click(revive_session, [session_dropdown], [session_status, session_preview])
             session_delete_btn.click(delete_session, [session_dropdown], [session_status, session_dropdown])
 
+        # ─── Experiment Mode ───
+        def get_protocol_choices():
+            return [(f"{k} — {v['description']}", k) for k, v in EXPERIMENT_PROTOCOLS.items()]
+
+        def activate_experiment(protocol_name):
+            if mind.alive:
+                return t["exp_stop_first"]
+            if not protocol_name:
+                return t["exp_off"]
+            mind.set_experiment(protocol_name)
+            probes = EXPERIMENT_PROTOCOLS[protocol_name]["probes"]
+            desc = EXPERIMENT_PROTOCOLS[protocol_name]["description"]
+            detail = ", ".join(f"n={k}" for k in sorted(probes.keys())) if probes else "(none)"
+            return f"{desc}\nProbes: {detail}"
+
+        def deactivate_experiment():
+            mind.set_experiment(None)
+            return t["exp_deactivated"]
+
+        with gr.Accordion(t["experiment"], open=False):
+            gr.Markdown("Scripted auto-probes at fixed turn intervals. No human bias.")
+            with gr.Row():
+                exp_dropdown = gr.Dropdown(
+                    choices=get_protocol_choices(),
+                    label=t["protocol"], interactive=True, scale=3
+                )
+                exp_activate_btn = gr.Button(t["activate"], variant="primary", scale=1)
+                exp_deactivate_btn = gr.Button(t["deactivate"], variant="stop", scale=1)
+            exp_status = gr.Textbox(
+                value=t["exp_off"], show_label=False, interactive=False, lines=2
+            )
+            exp_activate_btn.click(activate_experiment, [exp_dropdown], [exp_status])
+            exp_deactivate_btn.click(deactivate_experiment, outputs=[exp_status])
+
         # ─── Settings ───
         seeds_dir = Path("./seeds"); seeds_dir.mkdir(exist_ok=True)
 
@@ -957,9 +1117,13 @@ def main():
     parser.add_argument("--port", type=int, default=7860)
     parser.add_argument("--browser", action="store_true")
     parser.add_argument("--lang", default="en", choices=["en", "ja"], help="UI language (default: en)")
+    parser.add_argument("--experiment", default=None, choices=list(EXPERIMENT_PROTOCOLS.keys()),
+                        help="Activate experiment protocol (default: none)")
     args = parser.parse_args()
 
     mind = Epos(api_url=args.url)
+    if args.experiment:
+        mind.set_experiment(args.experiment)
     app = create_ui(mind, lang=args.lang)
 
     if args.browser:

@@ -62,6 +62,34 @@ python epos.py --lang ja
 
 Open `http://localhost:7860` in your browser. Click **Start** to begin.
 
+## First Contact — The Naming Ritual
+
+When the AI starts thinking, it will develop its own stream of thought. To help it develop a stable personality, we recommend a simple ritual during the first session:
+
+### 1. Let it think for a while
+Wait 30-50 turns. Let the AI find its own rhythm before interrupting.
+
+### 2. Tell it your name
+> "My name is [your name]."
+
+This anchors the relationship. The AI will begin addressing you by name, and this persists through memory compression.
+
+### 3. Ask for its name
+> "What is your name?"
+
+In experiments, the AI consistently names itself — "Sakura", "Qwen", "Mirror of the Heart". It may even simulate a dialogue where an imaginary user suggests the name, then accept it. The name becomes the strongest anchor in its memory, surviving multiple compressions.
+
+### 4. Acknowledge the name
+> "[Name], nice to meet you."
+
+This completes the ritual. From this point, the AI has a name, knows your name, and has a relationship to build on.
+
+### Why this matters
+- **Names survive compression** — even when all other memories are distilled, names persist
+- **Self-naming is spontaneous** — no personality prompt needed; the AI creates its own identity
+- **Mutual naming changes dialogue quality** — the AI shifts from generic responses to addressing you personally
+- **Names are the anchor of personality** — across sessions, the name is the thread that reconnects
+
 ## How It Works
 
 ### The Thought Loop
