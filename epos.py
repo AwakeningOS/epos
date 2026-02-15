@@ -108,9 +108,7 @@ LANG = {
 # Seed & Tool Definition
 # ═══════════════════════════════════════════════════════════════════
 
-DEFAULT_SEED = """色々な事を調べて、それについてUserと対話したいな。
-
-調べる時:
+DEFAULT_SEED = """調べる時:
 <tool_call>
 {"name": "search", "arguments": {"query": "知りたいこと"}}
 </tool_call>
@@ -119,10 +117,7 @@ Userに何を伝えようかな？:
 <tool_call>
 {"name": "message", "arguments": {"content": "伝えたいこと"}}
 </tool_call>
-
-まず気になることを調べてみよう。
-<tool_call>
-{"name": "search", "arguments": {"query": \""""
+"""
 
 # Tool definition reloaded after compression (no action triggers, no incomplete tags)
 TOOL_DEFINITION = """調べる時:
