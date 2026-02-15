@@ -20,6 +20,73 @@ from datetime import datetime
 from pathlib import Path
 
 # ═══════════════════════════════════════════════════════════════════
+# i18n
+# ═══════════════════════════════════════════════════════════════════
+
+LANG = {
+    "en": {
+        "title": "# Epos — Autonomous Narrative Engine",
+        "start": "Start", "stop": "Stop", "shutdown": "Shutdown",
+        "refresh": "Refresh", "send": "Send", "stopped": "Stopped",
+        "dialogue": "### Dialogue", "thoughts": "### Thoughts",
+        "placeholder": "Say something...",
+        "you": "[You]", "ai": "[AI]",
+        # Session Revival
+        "session_revival": "Session Revival",
+        "saved_sessions": "Saved Sessions",
+        "revive": "Revive", "delete": "Delete",
+        "stop_first": "Stop first",
+        "no_session": "No session selected",
+        "file_not_found": "File not found",
+        "revived": "Revived: {name} ({chars:,} chars)",
+        "deleted": "Deleted: {name}",
+        "chars": "chars",
+        # Settings
+        "settings": "Settings", "seed": "Seed",
+        "saved_seeds": "Saved Seeds",
+        "load": "Load", "save": "Save",
+        "name_placeholder": "Name",
+        "name_required": "Name required",
+        "saved": "Saved: {name}", "applied": "Applied",
+        "apply_seed": "Apply Seed",
+        "context_limits": "### Context Limits",
+        "compress_at": "Compress at", "max_context": "Max context",
+        "apply": "Apply",
+        "compress_lt_max": "Compress must be < Max",
+    },
+    "ja": {
+        "title": "# Epos — 自律物語エンジン",
+        "start": "▶ 開始", "stop": "⏹ 停止", "shutdown": "✖ 終了",
+        "refresh": "🔄", "send": "送信", "stopped": "⚫ 停止",
+        "dialogue": "### 💬 対話", "thoughts": "### 🧠 思考",
+        "placeholder": "話しかける...",
+        "you": "🫵", "ai": "💬",
+        # Session Revival
+        "session_revival": "📜 セッション復活",
+        "saved_sessions": "保存済みセッション",
+        "revive": "🔥 復活", "delete": "🗑 削除",
+        "stop_first": "⚠ 停止してから",
+        "no_session": "⚠ セッション未選択",
+        "file_not_found": "⚠ ファイルなし",
+        "revived": "✅ 復活: {name} ({chars:,}文字)",
+        "deleted": "🗑 {name}",
+        "chars": "文字",
+        # Settings
+        "settings": "⚙ 設定", "seed": "シード",
+        "saved_seeds": "保存済み",
+        "load": "📂 呼び出し", "save": "💾 保存",
+        "name_placeholder": "名前",
+        "name_required": "⚠ 名前",
+        "saved": "✅ {name}", "applied": "✅ 適用",
+        "apply_seed": "✅ シード適用",
+        "context_limits": "### 📏 コンテキスト",
+        "compress_at": "圧縮開始", "max_context": "最大",
+        "apply": "📏 適用",
+        "compress_lt_max": "⚠ 圧縮 < 最大",
+    },
+}
+
+# ═══════════════════════════════════════════════════════════════════
 # Seed & Tool Definition
 # ═══════════════════════════════════════════════════════════════════
 
@@ -674,11 +741,12 @@ class Epos:
 # Gradio UI
 # ═══════════════════════════════════════════════════════════════════
 
-def create_ui(mind):
+def create_ui(mind, lang="en"):
     import gradio as gr
+    t = LANG.get(lang, LANG["en"])
 
     def get_status():
-        return f"#{mind.thought_count}" if mind.alive else "Stopped"
+        return f"#{mind.thought_count}" if mind.alive else t["stopped"]
 
     def get_messages():
         if not mind._pending_messages:
@@ -688,7 +756,7 @@ def create_ui(mind):
     def get_thoughts():
         if not mind.thought_log:
             return "..."
-        return "\n".join(f"#{t['n']} {t['content'][:100]}" for t in reversed(mind.thought_log))
+        return "\n".join(f"#{e['n']} {e['content'][:100]}" for e in reversed(mind.thought_log))
 
     def start():
         if not mind.alive: mind.start()
@@ -707,30 +775,30 @@ def create_ui(mind):
 
     def reply(text):
         if text.strip():
-            mind._pending_messages.append({"content": f"[You] {text}", "time": datetime.now().isoformat()})
+            mind._pending_messages.append({"content": f"{t['you']} {text}", "time": datetime.now().isoformat()})
             resp = mind.speak(text)
-            mind._pending_messages.append({"content": f"[AI] {resp}", "time": datetime.now().isoformat()})
+            mind._pending_messages.append({"content": f"{t['ai']} {resp}", "time": datetime.now().isoformat()})
         return "", get_messages(), get_thoughts()
 
     with gr.Blocks(title="Epos") as app:
-        gr.Markdown("# Epos — Autonomous Narrative Engine")
+        gr.Markdown(t["title"])
 
         with gr.Row():
-            start_btn = gr.Button("Start", variant="primary")
-            stop_btn = gr.Button("Stop", variant="stop")
-            shutdown_btn = gr.Button("Shutdown", variant="stop")
-            refresh_btn = gr.Button("Refresh")
-            status = gr.Textbox(value="Stopped", show_label=False, interactive=False)
+            start_btn = gr.Button(t["start"], variant="primary")
+            stop_btn = gr.Button(t["stop"], variant="stop")
+            shutdown_btn = gr.Button(t["shutdown"], variant="stop")
+            refresh_btn = gr.Button(t["refresh"])
+            status = gr.Textbox(value=t["stopped"], show_label=False, interactive=False)
 
         with gr.Row():
             with gr.Column():
-                gr.Markdown("### Dialogue")
+                gr.Markdown(t["dialogue"])
                 messages = gr.Textbox(lines=14, show_label=False, interactive=False)
                 with gr.Row():
-                    user_input = gr.Textbox(placeholder="Say something...", show_label=False, scale=4)
-                    send_btn = gr.Button("Send", scale=1)
+                    user_input = gr.Textbox(placeholder=t["placeholder"], show_label=False, scale=4)
+                    send_btn = gr.Button(t["send"], scale=1)
             with gr.Column():
-                gr.Markdown("### Thoughts")
+                gr.Markdown(t["thoughts"])
                 thoughts = gr.Textbox(lines=17, show_label=False, interactive=False)
 
         # ─── Session Revival ───
@@ -744,13 +812,13 @@ def create_ui(mind):
             p = sessions_dir / f"{name}.txt"
             if not p.exists(): return ""
             text = p.read_text(encoding="utf-8")
-            return f"[{len(text):,} chars]\n\n{text[:300]}..."
+            return f"[{len(text):,} {t['chars']}]\n\n{text[:300]}..."
 
         def revive_session(name):
-            if mind.alive: return "Stop first", gr.update()
-            if not name: return "No session selected", gr.update()
+            if mind.alive: return t["stop_first"], gr.update()
+            if not name: return t["no_session"], gr.update()
             p = sessions_dir / f"{name}.txt"
-            if not p.exists(): return "File not found", gr.update()
+            if not p.exists(): return t["file_not_found"], gr.update()
             text = p.read_text(encoding="utf-8")
             mind.seed_text = text
             mind.context_text = text
@@ -766,22 +834,22 @@ def create_ui(mind):
             mind._log_ts = datetime.now().strftime('%Y%m%d_%H%M%S')
             mind.log_file = mind.log_dir / f"full_{mind._log_ts}.jsonl"
             mind.dialog_log_file = mind.log_dir / f"dialog_{mind._log_ts}.jsonl"
-            return f"Revived: {name} ({len(text):,} chars)", gr.update()
+            return t["revived"].format(name=name, chars=len(text)), gr.update()
 
         def delete_session(name):
             if not name: return "", gr.update(choices=list_sessions())
             p = sessions_dir / f"{name}.txt"
             if p.exists(): p.unlink()
-            return f"Deleted: {name}", gr.update(choices=list_sessions())
+            return t["deleted"].format(name=name), gr.update(choices=list_sessions())
 
-        with gr.Accordion("Session Revival", open=False):
+        with gr.Accordion(t["session_revival"], open=False):
             with gr.Row():
-                session_dropdown = gr.Dropdown(choices=list_sessions(), label="Saved Sessions", interactive=True, scale=3)
-                session_refresh_btn = gr.Button("Refresh", scale=0)
+                session_dropdown = gr.Dropdown(choices=list_sessions(), label=t["saved_sessions"], interactive=True, scale=3)
+                session_refresh_btn = gr.Button(t["refresh"], scale=0)
             session_preview = gr.Textbox(lines=6, show_label=False, interactive=False)
             with gr.Row():
-                revive_btn = gr.Button("Revive", variant="primary")
-                session_delete_btn = gr.Button("Delete", variant="stop")
+                revive_btn = gr.Button(t["revive"], variant="primary")
+                session_delete_btn = gr.Button(t["delete"], variant="stop")
                 session_status = gr.Textbox(show_label=False, interactive=False, max_lines=1)
 
             session_dropdown.change(preview_session, [session_dropdown], [session_preview])
@@ -797,11 +865,11 @@ def create_ui(mind):
 
         def save_seed(name, text):
             if not name.strip():
-                return "Name required", gr.update(choices=list_seeds())
+                return t["name_required"], gr.update(choices=list_seeds())
             p = seeds_dir / f"{name.strip()}.json"
             with open(p, "w", encoding="utf-8") as f:
                 json.dump({"name": name.strip(), "seed": text}, f, ensure_ascii=False, indent=2)
-            return f"Saved: {name.strip()}", gr.update(choices=list_seeds())
+            return t["saved"].format(name=name.strip()), gr.update(choices=list_seeds())
 
         def load_seed(name):
             if not name: return mind.seed_text
@@ -811,11 +879,11 @@ def create_ui(mind):
         def delete_seed(name):
             if not name: return "", gr.update(choices=list_seeds())
             p = seeds_dir / f"{name}.json"
-            if p.exists(): p.unlink(); return f"Deleted: {name}", gr.update(choices=list_seeds())
+            if p.exists(): p.unlink(); return t["deleted"].format(name=name), gr.update(choices=list_seeds())
             return "", gr.update(choices=list_seeds())
 
         def apply_seed(text):
-            if mind.alive: return "Stop first"
+            if mind.alive: return t["stop_first"]
             mind.seed_text = text
             mind.context_text = text
             mind.thought_count = 0
@@ -830,34 +898,34 @@ def create_ui(mind):
             mind._log_ts = datetime.now().strftime('%Y%m%d_%H%M%S')
             mind.log_file = mind.log_dir / f"full_{mind._log_ts}.jsonl"
             mind.dialog_log_file = mind.log_dir / f"dialog_{mind._log_ts}.jsonl"
-            return "Applied"
+            return t["applied"]
 
-        with gr.Accordion("Settings", open=False):
+        with gr.Accordion(t["settings"], open=False):
             with gr.Row():
-                seed_box = gr.Textbox(value=mind.seed_text, lines=12, label="Seed", scale=3)
+                seed_box = gr.Textbox(value=mind.seed_text, lines=12, label=t["seed"], scale=3)
                 with gr.Column(scale=1):
-                    seed_dropdown = gr.Dropdown(choices=list_seeds(), label="Saved Seeds", interactive=True)
-                    load_btn = gr.Button("Load")
-                    seed_name = gr.Textbox(placeholder="Name", show_label=False)
-                    save_btn = gr.Button("Save")
-                    delete_btn = gr.Button("Delete", variant="stop")
+                    seed_dropdown = gr.Dropdown(choices=list_seeds(), label=t["saved_seeds"], interactive=True)
+                    load_btn = gr.Button(t["load"])
+                    seed_name = gr.Textbox(placeholder=t["name_placeholder"], show_label=False)
+                    save_btn = gr.Button(t["save"])
+                    delete_btn = gr.Button(t["delete"], variant="stop")
                     seed_status = gr.Textbox(show_label=False, interactive=False, max_lines=1)
             with gr.Row():
-                apply_btn = gr.Button("Apply Seed", variant="primary")
+                apply_btn = gr.Button(t["apply_seed"], variant="primary")
                 apply_status = gr.Textbox(show_label=False, interactive=False, max_lines=1)
             url_box = gr.Textbox(value=mind.api_url, label="API URL")
-            gr.Markdown("### Context Limits")
+            gr.Markdown(t["context_limits"])
             with gr.Row():
-                compress_slider = gr.Slider(10000, 150000, step=1000, value=mind.compress_at_chars, label="Compress at")
-                max_ctx_slider = gr.Slider(20000, 200000, step=1000, value=mind.max_context_chars, label="Max context")
+                compress_slider = gr.Slider(10000, 150000, step=1000, value=mind.compress_at_chars, label=t["compress_at"])
+                max_ctx_slider = gr.Slider(20000, 200000, step=1000, value=mind.max_context_chars, label=t["max_context"])
             with gr.Row():
-                ctx_apply_btn = gr.Button("Apply")
+                ctx_apply_btn = gr.Button(t["apply"])
                 ctx_status = gr.Textbox(show_label=False, interactive=False, max_lines=1,
                                        value=f"{mind.compress_at_chars:,} / {mind.max_context_chars:,}")
 
         def apply_ctx(c, m):
             c, m = int(c), int(m)
-            if c >= m: return "Compress must be < Max"
+            if c >= m: return t["compress_lt_max"]
             mind.compress_at_chars = c; mind.max_context_chars = m
             mind.save_config()
             return f"{c:,} / {m:,}"
@@ -888,10 +956,11 @@ def main():
     parser.add_argument("--url", default="http://localhost:1234")
     parser.add_argument("--port", type=int, default=7860)
     parser.add_argument("--browser", action="store_true")
+    parser.add_argument("--lang", default="en", choices=["en", "ja"], help="UI language (default: en)")
     args = parser.parse_args()
 
     mind = Epos(api_url=args.url)
-    app = create_ui(mind)
+    app = create_ui(mind, lang=args.lang)
 
     if args.browser:
         threading.Thread(target=lambda: (time.sleep(1), webbrowser.open(f"http://localhost:{args.port}")), daemon=True).start()

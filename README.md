@@ -55,6 +55,9 @@ python epos.py --browser
 
 # Custom API URL
 python epos.py --url http://localhost:8080
+
+# Japanese UI
+python epos.py --lang ja
 ```
 
 Open `http://localhost:7860` in your browser. Click **Start** to begin.
@@ -117,8 +120,11 @@ epos/
 
 ### Via CLI
 ```bash
-python epos.py --url http://localhost:1234 --port 7860
+python epos.py --url http://localhost:1234 --port 7860 --lang ja
 ```
+
+### Language
+`--lang en` (default) or `--lang ja` for Japanese UI.
 
 ## Design Insights
 
