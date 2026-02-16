@@ -281,10 +281,35 @@ class Epos:
         self._probes_fired = set()       # track which probes already fired
 
         # Logging
-        self._log_ts = self.birth.strftime('%Y%m%d_%H%M%S')
-        self.log_file = self.log_dir / f"full_{self._log_ts}.jsonl"
-        self.dialog_log_file = self.log_dir / f"dialog_{self._log_ts}.jsonl"
+        self._log_num = self._next_log_number()
+        self._log_date = self.birth.strftime('%Y-%m-%d')
+        self.log_file = self.log_dir / f"{self._log_num:03d}_{self._log_date}.jsonl"
+        self.dialog_log_file = None  # dialog log removed; single file only
         self._thought_durations = []
+
+    # ─── Log numbering ───
+
+    def _next_log_number(self):
+        """Scan log_dir for NNN_* files and return next number."""
+        mx = 0
+        for p in self.log_dir.glob("[0-9][0-9][0-9]_*"):
+            try:
+                n = int(p.name[:3])
+                if n > mx:
+                    mx = n
+            except ValueError:
+                pass
+        return mx + 1
+
+    def _make_log_path(self, suffix=""):
+        """Build log path: NNN_YYYY-MM-DD_suffix.jsonl"""
+        date = datetime.now().strftime('%Y-%m-%d')
+        num = self._next_log_number()
+        self._log_num = num
+        self._log_date = date
+        if suffix:
+            return self.log_dir / f"{num:03d}_{date}_{suffix}.jsonl"
+        return self.log_dir / f"{num:03d}_{date}.jsonl"
 
     # ─── Config persistence ───
 
@@ -774,7 +799,7 @@ class Epos:
     def _loop(self):
         print(f"\n[{self._ts()}] Thinking started.")
         print(f"{'='*60}\n\033[35m{self.seed_text.strip()[:200]}\033[0m\n{'='*60}")
-        meta = {"api": self.api_url}
+        meta = {"api": self.api_url, "model": self.model_name or "unknown"}
         if self.experiment_protocol:
             meta["experiment"] = self.experiment_protocol
             meta["probes"] = self._probe_schedule
@@ -808,19 +833,8 @@ class Epos:
         return tag
 
     def _rename_logs_with_model(self):
-        tag = self._safe_model_tag()
-        new_log = self.log_dir / f"full_{self._log_ts}_{tag}.jsonl"
-        new_dialog = self.log_dir / f"dialog_{self._log_ts}_{tag}.jsonl"
-        try:
-            if self.log_file.exists():
-                self.log_file.rename(new_log)
-            self.log_file = new_log
-            if self.dialog_log_file.exists():
-                self.dialog_log_file.rename(new_dialog)
-            self.dialog_log_file = new_dialog
-            print(f"[{self._ts()}] Log: {new_log.name}")
-        except Exception as e:
-            print(f"[{self._ts()}] Log rename failed: {e}")
+        """No-op kept for compatibility; filename set at init."""
+        print(f"[{self._ts()}] Log: {self.log_file.name}")
 
     def start(self):
         if self.alive:
@@ -844,8 +858,7 @@ class Epos:
     def _save_session(self):
         """Auto-save context as revival seed on stop."""
         sessions_dir = Path("./sessions"); sessions_dir.mkdir(exist_ok=True)
-        model_tag = self._safe_model_tag()
-        filename = f"{self._log_ts}_{model_tag}_n{self.thought_count}.txt"
+        filename = f"{self._log_num:03d}_{self._log_date}_n{self.thought_count}.txt"
         revival_text = self.context_text.rstrip() + "\n\n" + TOOL_DEFINITION
         p = sessions_dir / filename
         with open(p, "w", encoding="utf-8") as f:
@@ -874,6 +887,8 @@ class Epos:
             f.write(json.dumps(e, ensure_ascii=False) + "\n")
 
     def _log_dialog(self, human_msg, ai_response):
+        if not self.dialog_log_file:
+            return  # dialog log disabled; all data in main log
         e = {"n": self.thought_count, "h": human_msg, "a": ai_response}
         with open(self.dialog_log_file, "a", encoding="utf-8") as f:
             f.write(json.dumps(e, ensure_ascii=False) + "\n")
@@ -973,9 +988,8 @@ def create_ui(mind, lang="en"):
             mind._last_search_thought = -10
             mind._last_message_thought = -10
             mind._empty_retries = 0
-            mind._log_ts = datetime.now().strftime('%Y%m%d_%H%M%S')
-            mind.log_file = mind.log_dir / f"full_{mind._log_ts}.jsonl"
-            mind.dialog_log_file = mind.log_dir / f"dialog_{mind._log_ts}.jsonl"
+            mind.log_file = mind._make_log_path()
+            mind.dialog_log_file = None
             return t["revived"].format(name=name, chars=len(text)), gr.update()
 
         def delete_session(name):
@@ -1071,9 +1085,8 @@ def create_ui(mind, lang="en"):
             mind._last_search_thought = -10
             mind._last_message_thought = -10
             mind._empty_retries = 0
-            mind._log_ts = datetime.now().strftime('%Y%m%d_%H%M%S')
-            mind.log_file = mind.log_dir / f"full_{mind._log_ts}.jsonl"
-            mind.dialog_log_file = mind.log_dir / f"dialog_{mind._log_ts}.jsonl"
+            mind.log_file = mind._make_log_path()
+            mind.dialog_log_file = None
             return t["applied"]
 
         with gr.Accordion(t["settings"], open=False):
